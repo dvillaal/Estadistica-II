@@ -1,0 +1,188 @@
+#leer archivo de datos
+datos <- read.csv(file.choose())
+
+#leer el número de filas(observaciones)
+nrow(datos)
+######AJUSTE DEL MODELO####
+
+#Denotamos las respectivas variables
+Y <- datos$Performance #De mis datos extraigo la variable performance
+X1 <- datos$Strength ; X2 <- datos$Skills ; X3 <- datos$Speed
+
+# Ajustamos nuestro modelo.
+modelo <- lm(Y ~ X1 + X2 + X3)
+
+#Hallar la matriz de diseño
+X <- model.matrix(modelo)
+
+#Hallar los parámetros estimados 
+B <- solve(t(X) %*% X) %*% t(X) %*% Y 
+
+#EstimaciÓn respuesta media "y_gorro".
+y_gorro <- X %*% B
+
+#Vector de errores estimados
+errores_estimados <- Y - y_gorro
+
+#Valor de estimación para la varianza
+
+n <- nrow(datos); p <- 4
+MSE <- (t(errores_estimados) %*% errores_estimados)/(n-p)
+
+#Todo lo hecho anteriormente es una forma manual.
+#Al usar summary, obtengo todo. (Estimate = betas estimados)
+summary(modelo)
+
+#########PARA PRUEBAS DE HIPÓTESIS#########
+
+##Rechazo H0 -> si el valor p < alpha
+#Si rechazo H0 significa que son significativas 
+
+# 1) SIGNIFICANCIA GLOBAL ->  ESTADISTICO F
+#Ajustamos el modelo reducido
+#Pongo las variables regresoras (Xi) que me quedan luego de reemplazar la HN
+
+modelo_reducido <- lm(Y ~ 1)
+
+#Para hallar los datos del estadisco de prueba 
+#Función ANOVA del modelo reducido
+anova(modelo_reducido) #SSE = Sum sq
+SSE_reducido <- 2183751
+gl_MR <- 499
+  
+#Función Anova modelo full
+anova(modelo)
+SSE_full <- 51427
+gl_MF <- 496
+
+#El valor de V: Sabiendo que se usa para el estadístico de prueba
+v <- (gl_MR - gl_MF)
+
+#Estadístico de prueba
+F_modelo <- ((SSE_reducido - SSE_full)/v)/MSE
+
+
+#######LO MISMO PERO MÁS RÁPIDO######
+
+#utilizamos una ANOVA compuesta
+
+# Ajustamos nuestro modelo.
+modelo <- lm(Y ~ X1 + X2 + X3)
+
+#Ajustamos el modelo reducido
+#Pongo las covariables que me quedan luego de reemplazar la HN
+modelo_reducido <- lm(Y ~ 1)
+
+#Con esta anova obtengo el valor F y el valor P
+anova_comparacion <- anova(modelo_reducido, modelo)
+
+
+# 2) SIGNIFICANCIA INDIVIDUAL 
+#Obtengo todos los valores T (t value) y valor p (Pr(>|t|) )
+summary(modelo)
+
+# 3) PRUEBA LINEAL GENERAL -> cuando tengo un beta igual a otro beta
+modelo <- lm(Y ~ X1 + X2 + X3) #modelo completo
+
+#Definir nueva variable
+X123 <- X1 + X2 + X3 #Con lo que obtengo en las ecuaciones de las hipotesis
+modelo_LG <- lm(Y ~ X123) #modelo de las hipotesis lineal general
+
+Anova_LG <- anova(modelo_LG, modelo)
+
+
+########INTERVALOS DE CONFIANZA##########
+#Verificar la significancia de los parámetros -> Si el intervalo contiene al cero el parámetro no es significativo.
+confint(modelo) #por defecto en alpha = 0.05, con una confianza del 95%.
+
+
+#######VERIFICACIÓN DE SUPUESTOS##########
+
+##Verificamos normalidad -> criterio grafico 
+#Si todos los puntos se ajustan a la recta, entonces en normal.
+plot(modelo,2)
+
+##Verificamos normalidad -> criterio análitico - Shapiro wilks
+#Asociado a las hipotesis -> H0: Normal H1: No normal
+shapiro.test(modelo$residuals)
+
+
+##Verificación de varianza
+#Si trazo 2 rectas, una arriba y una abajo, todos los puntos tienen que estar en el rectángulo.
+plot(modelo,1)
+
+##Verificación del supuesto de media cero -> siempre se cumple
+#Ver gráfica anterior
+
+
+######IDENTIFICACIÓN PUNTOS ATÍPICOS Y DE BALANCEO######
+#Son atípicos si abs(di)>3;abs(ri)>3
+#Son de balanceo si hii > 2p/n, con 2p/n < 1
+
+##BALANCEO
+#Verificamos 2p/n < 1
+verificacion <- 2*p/n
+hat_values <- hatvalues(modelo) #obtenemos los hii
+balanceo <- which(hat_values > verificacion) #Los que cumplen con el criterio, son puntos de balanceo. Lo que aparece es el número de la observación
+#Estos puntos me pueden afectar R^2 y la estimación del error estandar
+
+
+##ATIPICOS 
+estandarizados <- rstandard(modelo)
+estudentizados <- rstudent(modelo)
+atipicos_estandarizados <- which(abs(estandarizados) > 3)
+atipicos_estudentizados <- which(abs(estudentizados) > 3) #obtenemos las observaciones atípicas
+
+#Una observación influencial se caracteriza como tal si es inual en X y en Y 
+#Puedo identificarlos a partir de tres criterios:cooks,DFBETAS,DFFITS.
+#Para que una< observación sea influencial, no necesariamente debe ser catalogada como tal en todos los criterios anteriores.
+
+##INFLUENCIALES
+#cooks:Di > 1
+#DFBETAS:abs(DFBETAS) > 2/sqrt(n) 
+#DFFITS: abs(DFFITS) > 2/sqrt(p/n)
+
+cooks <- cooks.distance(modelo)
+which(cooks > 1) #verificar cooks
+
+DFbetas <- dfbetas(modelo)
+which(abs(DFbetas) > 2/sqrt(n)) #verificar DFbetas
+
+DFfits <- dffits(modelo)
+which(abs(DFfits) > (2*sqrt(p/n))) #verificar DFfist
+
+##RESUMEN DE LA INFO ANTERIOR
+influencias <- influence.measures(modelo)
+summary(influencias)
+#Los que tienen el asterisco son los influenciales
+
+#########INFERENCIA Y EXTRAPOLACIÓN######
+
+#Para ver si hay extrapolación miro el valor minimo y maximo de las X, y eso es como un rango. Si mi componente x1 del vector se sale del rango hay problemas(asi con todos)
+X <- model.matrix(modelo) #matriz de diseño
+Hat_values <- hat(X) #hii
+x01 <- c(1,45.03,80.88,60.33)#Vectores que me dan en el ejercicio
+x02 <- c(1,77.08,100,13.76)
+summary(X)
+
+##VERIFICACIÓN EXTRAPOLACIÓN
+#Si pertenece -> no hay extrapolación
+#Si no pertenece -> Hay extrapolación -> No se puede realizar predicciones.
+
+ifelse(t(x01)%*%solve(t(X)%*%X)%*%x01 < max(Hat_values), "Pertenece a la región de diseño","No pertenece")
+
+ifelse(t(x02)%*%solve(t(X)%*%X)%*%x02 < max(Hat_values), "Pertenece a la región de diseño","No pertenece")
+
+##PREDICCIONES E INTERVALO DE PREDICCIÓN
+predict(modelo, newdata = data.frame(X1 = 45.03,
+                                     X2 = 80.88,
+                                     X3 = 60.33), interval = "prediction")
+#fit -> predicción puntual(y gorro)
+#lwr -> Limite inferior
+#up -> Limite superior
+
+
+
+
+
+
