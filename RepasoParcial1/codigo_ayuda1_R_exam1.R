@@ -1,6 +1,7 @@
 
 library(rio)
 library(here)
+library(magrittr)  # o library(dplyr)
 datos <- rio::import(here(file.choose()))
 
 ### ver la estructura de los datos
@@ -9,20 +10,35 @@ head(datos)
 #install.packages("car")
 library(car)
 
-modelo <- lm(Cantidad_O2 ~ X1 + X2 + X3 + X4 + X5 + X6, data = datos)
+Cantidad_02 <- datos$Cantidad_O2
+X1 <- datos$X1
+X2 <- datos$X2
+X3 <- datos$X3
+X4 <- datos$X4
+X5 <- datos$X5
+X6 <- datos$X6
+
+modelo <- lm(Cantidad_02 ~ X1 + X2 + X3 + X4 + X5 + X6, data = datos)
 
 summary(modelo)
-summary(modelo)$coefficients
+summary(modelo)$coefficients %>% round(digits = 6)
 
 source(file.choose())
 myAnova(modelo)
+
+modelo_R <- lm(Cantidad_02 ~ 1)
+
+res <- anova(modelo_R, modelo)
+res
 
 source(file.choose())
 myAllRegTable(modelo)
 
 ### MR PH-SUB_CONJUNTO
 
-modelo_MR <- lm(Cantidad_O2 ~ X1 + X2 + X3, data = datos)
+modelo_MR <- lm(Cantidad_02 ~ X1 + X2 + X3, data = datos)
+
+anova(modelo_MR, modelo)
 
 summary(modelo_MR)
 summary(modelo_MR)$coefficients
@@ -30,13 +46,15 @@ summary(modelo_MR)$coefficients
 source(file.choose())
 myAnova(modelo_MR)
 
+anova(modelo_MR, modelo)
+
 ### MR PHLG
 ## Datos para MR en PHLG
 datos <- modelo$model         ## matriz de datos-xY
 head(datos)
 
 ## Matriz Diseño X
-X <- model.matrix(modelo)
+X <- model.matrix(modelo)     #Residuals 27 207.06    7.67          
 head(X)
 
 datos_MR_PHLG <- data.frame(datos$Cantidad_O2,datos$X1+datos$X2,
@@ -62,6 +80,11 @@ summary(modelo_mr_phlg)$coefficients
 source(file.choose())
 myQQnorm(modelo)
 
+shapiro.test(modelo$residuals)
+
+estudentizados <- rstudent(modelo)
+atipicos_estudentizados <- which(abs(estudentizados) > 3)
+
 ## Evaluación de varianza constante de errores
 
 ## residuales-crudos
@@ -84,8 +107,13 @@ plot(y_gorro, res.stud, xlab = "Valores Ajustado", ylab = "Residuales Estudentiz
      main = "Residuales Estudentizados vs. Valores Ajustados")
 abline(h = 0, lty = 2, col = 2)
 
+estandarizados <- rstandard(modelo)
+estudentizados <- rstudent(modelo)
 
-## Tabla de resumen para diagnóstico de valores extremos
+atipicos_estandarizados <- which(abs(estandarizados) >  3)
+atipicos_estudentizados <- which(abs(estudentizados) >  3)
+
+at## Tabla de resumen para diagnóstico de valores extremos
 
 ## Cálculo de errores estándar de los valores ajustados
 se.y_gorro <- round(predict(modelo, se.fit = T)$se.fit,4)

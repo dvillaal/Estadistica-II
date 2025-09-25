@@ -66,7 +66,7 @@ X <- model.matrix(modelo)
 head(X)
 
 datos_MR_PHLG <- data.frame(datos$Y,datos$X1+datos$X2,
-                     datos$X3+datos$X4)
+                            datos$X3+datos$X4)
 
 colnames(datos_MR_PHLG) <- c("Y","X12","X34")
 head(datos_MR_PHLG)
